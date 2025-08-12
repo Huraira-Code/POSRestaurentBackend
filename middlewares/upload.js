@@ -2,7 +2,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-const tempDir = path.join(__dirname, '../uploads/temp');
+const tempDir = path.join('/tmp');
 if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
 const storage = multer.diskStorage({
