@@ -28,6 +28,8 @@ async function mapOrderItem(orderItem, paymentMethod) {
 
   // options handling
   const options = orderItem.options || [];
+  console.log("myfault2" , orderItem)
+  console.log("myfault1",options)
   const optionsTotal = options.reduce((sum, opt) => sum + (opt.price || 0), 0);
 
   const basePrice = fullItem.price;
@@ -85,7 +87,7 @@ async function mapOrderItem(orderItem, paymentMethod) {
     totalTax: totalItemTax,
 
     // Options
-    options: fullItem.options || [],
+    options: options || [],
     selectedOptions: options,
 
     // Media
