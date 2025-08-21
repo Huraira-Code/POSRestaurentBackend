@@ -28,8 +28,8 @@ async function mapOrderItem(orderItem, paymentMethod) {
 
   // options handling
   const options = orderItem.options || [];
-  console.log("myfault2" , orderItem)
-  console.log("myfault1",options)
+  console.log("myfault2", orderItem);
+  console.log("myfault1", options);
   const optionsTotal = options.reduce((sum, opt) => sum + (opt.price || 0), 0);
 
   const basePrice = fullItem.price;
@@ -235,12 +235,12 @@ const createOrder = async (req, res, next) => {
           totalAmount += totalDealPrice;
           totalTax += totalDealTax;
           totalSavings += deal.savings * dealQuantity;
-          console.log("meraaaaaaaaaa2" , dealItem)
+          console.log("meraaaaaaaaaa2", dealItem);
           return {
             dealId: deal._id,
             name: deal.name,
             dealPrice: dealItem.totalPrice,
-            customization:dealItem.selectedCustomizations,
+            customization: dealItem.selectedCustomizations,
             originalPrice: deal.originalPrice * dealQuantity,
             savings: deal.savings * dealQuantity,
             quantity: dealQuantity,
@@ -2020,6 +2020,42 @@ const exportOrdersToExcel = async (req, res, next) => {
   }
 };
 
+const updatePaymentMethod = async (req, res) => {
+  try {
+    const { orderId } = req.body; // orderId from URL
+    const { paymentMethod } = req.body; // CASH, CARD, ONLINE
+
+    // Validate payment method
+    const allowedMethods = ["CASH", "CARD", "ONLINE"];
+    if (!allowedMethods.includes(paymentMethod)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid payment method" });
+    }
+
+    const order = await Order.findByIdAndUpdate(
+      orderId,
+      { paymentMethod: paymentMethod },
+      { new: true }
+    );
+
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+
+    return res
+      .status(200)
+      .json({ success: true, message: "Payment method updated", order });
+  } catch (error) {
+    console.error("Error updating payment method:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Server error", error: error.message });
+  }
+};
+
 module.exports = {
   createOrder,
   updateOrder,
@@ -2030,4 +2066,5 @@ module.exports = {
   exportOrdersToExcel,
   generateCustomerReceipts,
   printDailySalesReportAndCloseDay,
+  updatePaymentMethod,
 };
