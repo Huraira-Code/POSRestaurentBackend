@@ -6,7 +6,7 @@ const { createItem, getAllItemsOfAdmin, deleteItemOfAdmin, updateItemOfAdmin, ge
 const { createMenu, getAllMenuOfAdmin, deleteMenuOfAdmin, updateMenuOfAdmin, importMenus, assignItemToImportedMenu, removeItemFromMenu } = require("../controllers/menuController");
 const upload = require('../middlewares/upload');
 const { getAllReceiptsForSuperAdmin, createReceiptFormat, updateReceiptFormat } = require("../controllers/receiptController");
-const { getOrdersForAdmin, exportOrdersToExcel } = require("../controllers/orderController");
+const { getOrdersForAdmin, exportOrdersToExcel, printDailySalesReportAndCloseDay } = require("../controllers/orderController");
 const { createVoucher, updateVoucher, getAllVoucher, getVouchersByAdmin, deleteVoucher, validateVoucher } = require("../controllers/voucherController");
 const { createDeal, getDealsForAdmin, updateDeal, deleteDeal, getDealById, getMyCreatedDeals, calculateDealTax } = require("../controllers/dealController");
 const router = express.Router();
@@ -91,6 +91,7 @@ router.route("/get-vouchers").get(isVerifiedUser(['SuperAdmin']), getAllVoucher)
 router.route("/get-vouchers/:adminId").get(isVerifiedUser(['SuperAdmin']), getVouchersByAdmin);
 router.route("/delete-voucher").delete(isVerifiedUser(['SuperAdmin']), deleteVoucher);
 router.route("/validate-voucher").post(isVerifiedUser(['Admin', 'SuperAdmin']), validateVoucher);
+router.route("/printDailySalesReportAndCloseDay").post(isVerifiedUser(['Admin']), printDailySalesReportAndCloseDay);
 
 // Deal Management Routes (SuperAdmin)
 router.route("/create-deal").post(isVerifiedUser(['SuperAdmin']), createDeal);
