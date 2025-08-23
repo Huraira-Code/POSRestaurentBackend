@@ -4,7 +4,7 @@ const { getCategoriesForAdmin,  } = require("../controllers/categoryController")
 const { getAllMenuOfAdmin } = require("../controllers/menuController");
 const { getAllItemsForAdminPanel, getAllItemsForAdmin } = require("../controllers/itemController");
 const { printReceipt, getAllReceipts } = require("../controllers/receiptController");
-const { createOrder, updateOrder, completeOrder, getPayment, getAllOrders, generateCustomerReceipts, updatePaymentMethod } = require("../controllers/orderController");
+const { createOrder, updateOrder, completeOrder, getPayment, getAllOrders, generateCustomerReceipts, updatePaymentMethod, addItemsAndDealsToOrder } = require("../controllers/orderController");
 const { getMyDeals } = require("../controllers/dealController");
 const router = express.Router();
 
@@ -27,6 +27,7 @@ router.route("/get-receipts").get(isVerifiedUser(["Admin"]), getAllReceipts);
 // create order
 router.route("/create-order").post(isVerifiedUser(["Admin"]), createOrder)
 router.route("/change-payment-method").post(isVerifiedUser(["Admin"]),updatePaymentMethod )
+router.route("/update-order-item-deal").post(isVerifiedUser(["Admin"]), addItemsAndDealsToOrder)
 
 router.route("/update-order").patch(isVerifiedUser(["Admin"]), updateOrder)
 router.route("/complete-order").patch(isVerifiedUser(["Admin"]), completeOrder)

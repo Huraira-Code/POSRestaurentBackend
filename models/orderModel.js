@@ -239,19 +239,8 @@ const orderSchema = new mongoose.Schema(
     // 🆕 Kitchen Receipts (history of prints for kitchen)
     kitchenReceipts: [
       {
-        menuId: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Menu",
-        },
-        menuName: String,
-        logo: String,
         items: [],
         deals: [],
-        isNewlyAdded: { type: Boolean, default: false },
-        isDealReceipt: { type: Boolean, default: false },
-        customerName: String,
-        orderType: String,
-        printedAt: { type: Date, default: Date.now },
       },
     ],
   },

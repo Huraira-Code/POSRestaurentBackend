@@ -290,6 +290,137 @@ const createOrder = async (req, res, next) => {
     next(error);
   }
 };
+
+const addItemsAndDealsToOrder = async (req, res, next) => {
+  try {
+    const { orderId, cart, deals } = req.body;
+    const adminId = req.user.id;
+
+    if (!orderId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Order ID is required" });
+    }
+
+    // Find existing order
+    const existingOrder = await Order.findById(orderId);
+    if (!existingOrder) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+    console.log("wafa na bewafi" ,existingOrder.paymentMethod )
+    // Init totals
+    let totalAmount = 0;
+    let totalTax = 0;
+    let totalSavings = 0;
+    let totalVoucherDiscount = 0;
+
+    // =====================
+    // Process new items
+    // =====================
+    let orderItems = [];
+    if (cart && cart.length > 0) {
+      orderItems = await Promise.all(
+        cart.map((item) => mapOrderItem(item, existingOrder.paymentMethod )) // <-- same helper you use in create
+      );
+
+      orderItems.forEach((it) => {
+        totalAmount += it.itemSubtotal;
+        totalTax += it.totalTax;
+        totalSavings += it.itemDiscount;
+      });
+    }
+
+    // =====================
+    // Process new deals
+    // =====================
+    let orderDeals = [];
+    if (deals && deals.length > 0) {
+      orderDeals = await Promise.all(
+        deals.map(async (dealItem) => {
+          const deal = await Deal.findById(dealItem.dealId).populate({
+            path: "items.itemId",
+            select: "name price tax",
+          });
+
+          if (!deal)
+            throw new Error(`Deal with ID ${dealItem.dealId} not found`);
+          if (!deal.isActive)
+            throw new Error(`Deal ${deal.name} is not active`);
+          if (deal.validUntil && new Date() > deal.validUntil)
+            throw new Error(`Deal ${deal.name} has expired`);
+          if (deal.adminId.toString() !== adminId)
+            throw new Error(`Deal ${deal.name} does not belong to this admin`);
+
+          const dealQuantity = dealItem.quantity || 1;
+          const dealTaxRate = await deal.calculateTax(existingOrder.paymentMethod);
+          const totalDealPrice = dealItem.totalPrice * dealQuantity;
+          const totalDealTax = totalDealPrice * (dealTaxRate / 100);
+
+          totalAmount += totalDealPrice;
+          totalTax += totalDealTax;
+          totalSavings += deal.savings * dealQuantity;
+
+          return {
+            dealId: deal._id,
+            name: deal.name,
+            dealPrice: dealItem.totalPrice,
+            customization: dealItem.selectedCustomizations,
+            originalPrice: deal.originalPrice * dealQuantity,
+            savings: deal.savings * dealQuantity,
+            quantity: dealQuantity,
+            dealTax: totalDealTax,
+            items: deal.items.map((item) => ({
+              itemId: item.itemId._id,
+              name: item.itemId.name,
+              quantity: item.quantity,
+              selectedOptions: item.selectedOptions || [],
+            })),
+          };
+        })
+      );
+    }
+
+    // =====================
+    // Push into existing order
+    // =====================
+    const updatedOrder = await Order.findByIdAndUpdate(
+      orderId,
+      {
+        $push: {
+          items: { $each: orderItems },
+          deals: { $each: orderDeals },
+          kitchenReceipts: {
+            items: orderItems,
+            deals: orderDeals,
+            printedAt: new Date(),
+          },
+        },
+        $inc: {
+          totalAmount: totalAmount,
+          totalTax: totalTax,
+          totalSavings: totalSavings,
+          totalVoucherDiscount: totalVoucherDiscount,
+        },
+      },
+      { new: true }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Items and deals added successfully",
+      data: updatedOrder,
+      newItems: orderItems,
+      newDeals: orderDeals,
+      totals: { totalAmount, totalTax, totalSavings, totalVoucherDiscount },
+    });
+  } catch (error) {
+    console.error("Error adding items and deals:", error);
+    next(error);
+  }
+};
+
 const printDailySalesReportAndCloseDay = async (req, res, next) => {
   try {
     const adminId = req.user.id;
@@ -443,7 +574,6 @@ const updateOrder = async (req, res, next) => {
       orderId,
       newlyAddedItems = [],
       newlyAddedDeals = [],
-
       orderStatus,
       paymentStatus,
     } = req.body;
@@ -2067,4 +2197,5 @@ module.exports = {
   generateCustomerReceipts,
   printDailySalesReportAndCloseDay,
   updatePaymentMethod,
+  addItemsAndDealsToOrder
 };
