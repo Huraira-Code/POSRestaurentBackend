@@ -25,7 +25,43 @@ const dealItemSchema = new mongoose.Schema(
   { _id: false }
 );
 
-// Customization schema (for flavors, base types, etc.)
+// Nested Option Schema
+const optionSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    price: {
+      type: Number,
+      default: 0,
+    },
+    // 👇 recursive nesting: options within options
+    subOptions: [
+      {
+        name: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+        price: {
+          type: Number,
+          default: 0,
+        },
+        subOptions: [
+          {
+            name: { type: String},
+            price: { type: Number, default: 0 },
+          },
+        ],
+      },
+    ],
+  },
+  { _id: true }
+);
+
+// Customization schema (with recursive options)
 const customizationSchema = new mongoose.Schema(
   {
     name: {
@@ -41,21 +77,11 @@ const customizationSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
-    options: [
-      {
-        name: {
-          type: String,
-          required: true,
-        },
-        price: {
-          type: Number,
-          default: 0,
-        },
-      },
-    ],
+    options: [optionSchema],
   },
   { _id: true }
 );
+
 
 // Deal Schema
 const dealSchema = new mongoose.Schema(

@@ -2,7 +2,6 @@ const Deal = require("../models/dealModel");
 const Item = require("../models/itemModel");
 const User = require("../models/userModel");
 
-// Create a new deal (SuperAdmin only)
 const createDeal = async (req, res, next) => {
   try {
     const superAdminId = req.user.id;
@@ -16,20 +15,20 @@ const createDeal = async (req, res, next) => {
       customizations,
     } = req.body;
 
-    // Check if deal name already exists for this specific admin
+    // ✅ 1. Ensure unique deal name for this admin
     const existingDeal = await Deal.findOne({
-      adminId: adminId,
+      adminId,
       name: { $regex: new RegExp(`^${name.trim()}$`, "i") },
     });
     if (existingDeal) {
       return res.status(400).json({
         success: false,
         message:
-          "Deal name must be unique for this admin. A deal with this name already exists for this restaurant.",
+          "Deal name must be unique for this admin. A deal with this name already exists.",
       });
     }
 
-    // Validate that all items exist and belong to the specified admin
+    // ✅ 2. Validate that all items exist & belong to the admin
     for (const dealItem of items) {
       const item = await Item.findById(dealItem.itemId);
       if (!item) {
@@ -41,21 +40,40 @@ const createDeal = async (req, res, next) => {
       if (item.adminId.toString() !== adminId) {
         return res.status(400).json({
           success: false,
-          message: `Item ${item.name} does not belong to the specified admin`,
+          message: `Item '${item.name}' does not belong to this admin`,
         });
       }
     }
 
-    // Verify admin exists
+    // ✅ 3. Verify admin exists
     const admin = await User.findById(adminId);
     if (!admin || admin.role !== "Admin") {
       return res.status(404).json({
         success: false,
-        message: "Admin not found",
+        message: "Admin not found or invalid role",
       });
     }
 
-    // Validate customizations structure
+    // ✅ 4. Recursive customization validator
+    const validateOptions = (options, parentName) => {
+      if (!Array.isArray(options) || options.length === 0) {
+        throw new Error(
+          `Customization '${parentName}' must have at least one option`
+        );
+      }
+
+      for (const option of options) {
+        if (!option.name || typeof option.name !== "string") {
+          throw new Error(
+            `Invalid option in customization '${parentName}' – option must have a name`
+          );
+        }
+        if (option.subOptions && option.subOptions.length > 0) {
+          validateOptions(option.subOptions, option.name); // 🔁 recursion
+        }
+      }
+    };
+
     if (customizations && Array.isArray(customizations)) {
       for (const customization of customizations) {
         if (!customization.name || typeof customization.name !== "string") {
@@ -64,22 +82,22 @@ const createDeal = async (req, res, next) => {
             message: "Each customization must have a valid name",
           });
         }
-        if (!customization.options || customization.options.length === 0) {
-          return res.status(400).json({
-            success: false,
-            message: `Customization '${customization.name}' must have at least one option`,
-          });
-        }
         if (customization.minSelect > customization.maxSelect) {
           return res.status(400).json({
             success: false,
             message: `Customization '${customization.name}' has invalid min/max selection`,
           });
         }
+
+        try {
+          validateOptions(customization.options, customization.name);
+        } catch (err) {
+          return res.status(400).json({ success: false, message: err.message });
+        }
       }
     }
 
-    // Create new deal
+    // ✅ 5. Create new deal
     const newDeal = await Deal.create({
       name: name.trim(),
       description,
@@ -91,7 +109,7 @@ const createDeal = async (req, res, next) => {
       customizations,
     });
 
-    // Populate items for response (This line will now work!)
+    // ✅ 6. Populate items for response
     await newDeal.getDetailsWithItems();
 
     res.status(201).json({
@@ -103,6 +121,7 @@ const createDeal = async (req, res, next) => {
     next(error);
   }
 };
+
 
 // Get all deals for a specific admin (SuperAdmin view)
 const getDealsForAdmin = async (req, res, next) => {

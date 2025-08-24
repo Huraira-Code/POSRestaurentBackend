@@ -440,7 +440,7 @@ const printDailySalesReportAndCloseDay = async (req, res, next) => {
       });
     }
 
-    // --- 2. Aggregate Sales Data ---
+    // --- Aggregates ---
     let totalOrdersClosed = 0;
     let totalSalesAmount = 0;
     let totalTaxCollected = 0;
@@ -450,13 +450,22 @@ const printDailySalesReportAndCloseDay = async (req, res, next) => {
     const itemsSoldSummary = [];
     const dealsSoldSummary = [];
 
-    const paymentMethodSummary = {
+    const paymentMethodSummaryPaid = {
       CASH: 0,
       CARD: 0,
       ONLINE: 0,
       COD: 0,
       on_arrival: 0,
     };
+
+    const paymentMethodSummaryUnpaid = {
+      CASH: 0,
+      CARD: 0,
+      ONLINE: 0,
+      COD: 0,
+      on_arrival: 0,
+    };
+
     let highestOrderNumberProcessed = 0;
 
     ordersToClose.forEach((order) => {
@@ -464,14 +473,13 @@ const printDailySalesReportAndCloseDay = async (req, res, next) => {
       totalSalesAmount += order.totalAmount || 0;
       totalTaxCollected += order.totalTax || 0;
       totalVoucherDiscount += order.voucherDiscount || 0;
-
-      // Update the total savings given based on each order's savings.
       totalSavingsGiven += order.totalSavings || 0;
 
       if (order.orderNumber > highestOrderNumberProcessed) {
         highestOrderNumberProcessed = order.orderNumber;
       }
 
+      // --- Items ---
       order.items.forEach((item) => {
         for (let i = 0; i < item.quantity; i++) {
           itemsSoldSummary.push({
@@ -484,6 +492,7 @@ const printDailySalesReportAndCloseDay = async (req, res, next) => {
         }
       });
 
+      // --- Deals ---
       order.deals.forEach((deal) => {
         for (let i = 0; i < deal.quantity; i++) {
           dealsSoldSummary.push({
@@ -496,39 +505,45 @@ const printDailySalesReportAndCloseDay = async (req, res, next) => {
         }
       });
 
+      // --- Payment method split (by paymentStatus) ---
       const paymentTypeKey = order.paymentMethod;
-      if (paymentMethodSummary.hasOwnProperty(paymentTypeKey)) {
-        paymentMethodSummary[paymentTypeKey] += order.totalAmount || 0;
+      if (order.paymentStatus === "PAID") {
+        if (paymentMethodSummaryPaid.hasOwnProperty(paymentTypeKey)) {
+          paymentMethodSummaryPaid[paymentTypeKey] += order.totalAmount || 0;
+        }
+      } else if (order.paymentStatus === "UNPAID") {
+        if (paymentMethodSummaryUnpaid.hasOwnProperty(paymentTypeKey)) {
+          paymentMethodSummaryUnpaid[paymentTypeKey] += order.totalAmount || 0;
+        }
       }
     });
 
-    // --- 3. Mark Orders as Closed ---
+    // --- Mark orders as closed ---
     await Order.updateMany(
       { _id: { $in: ordersToClose.map((order) => order._id) } },
       { $set: { isEndOfDayClosed: true } }
     );
 
-    // --- 4. Reset Daily Order Counter to 0 ---
-    // This is the new, crucial step. It ensures the next order starts a new sequence.
+    // --- Reset Daily Counter ---
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     await Counter.findOneAndUpdate(
       { _id: "orderNumber" },
       {
         $set: {
-          sequence_value: 0, // Set the counter to 0 so the next order will be number 1.
-          last_reset_date: today, // Update the last reset date.
+          sequence_value: 0,
+          last_reset_date: today,
         },
       },
-      { upsert: true } // Creates the document if it doesn't exist
+      { upsert: true }
     );
 
-    // --- 5. Construct the Sales Report (the "receipt") ---
+    // --- Build Sales Report ---
     const salesReport = {
-      adminId: adminId,
+      adminId,
       reportGeneratedDate: now.toISOString().split("T")[0],
       reportGeneratedAt: now,
-      totalOrdersClosed: totalOrdersClosed,
+      totalOrdersClosed,
       totalSalesAmount: parseFloat(totalSalesAmount.toFixed(2)),
       totalTaxCollected: parseFloat(totalTaxCollected.toFixed(2)),
       totalSavingsGiven: parseFloat(totalSavingsGiven.toFixed(2)),
@@ -547,9 +562,20 @@ const printDailySalesReportAndCloseDay = async (req, res, next) => {
         totalSavings: parseFloat(deal.totalSavings.toFixed(2)),
       })),
       paymentMethodSummary: {
-        CASH: parseFloat(paymentMethodSummary.CASH.toFixed(2)),
-        CARD: parseFloat(paymentMethodSummary.CARD.toFixed(2)),
-        ONLINE: parseFloat(paymentMethodSummary.ONLINE.toFixed(2)),
+        PAID: {
+          CASH: parseFloat(paymentMethodSummaryPaid.CASH.toFixed(2)),
+          CARD: parseFloat(paymentMethodSummaryPaid.CARD.toFixed(2)),
+          ONLINE: parseFloat(paymentMethodSummaryPaid.ONLINE.toFixed(2)),
+          COD: parseFloat(paymentMethodSummaryPaid.COD.toFixed(2)),
+          on_arrival: parseFloat(paymentMethodSummaryPaid.on_arrival.toFixed(2)),
+        },
+        UNPAID: {
+          CASH: parseFloat(paymentMethodSummaryUnpaid.CASH.toFixed(2)),
+          CARD: parseFloat(paymentMethodSummaryUnpaid.CARD.toFixed(2)),
+          ONLINE: parseFloat(paymentMethodSummaryUnpaid.ONLINE.toFixed(2)),
+          COD: parseFloat(paymentMethodSummaryUnpaid.COD.toFixed(2)),
+          on_arrival: parseFloat(paymentMethodSummaryUnpaid.on_arrival.toFixed(2)),
+        },
       },
     };
 
@@ -564,6 +590,7 @@ const printDailySalesReportAndCloseDay = async (req, res, next) => {
     next(error);
   }
 };
+
 
 const updateOrder = async (req, res, next) => {
   try {
