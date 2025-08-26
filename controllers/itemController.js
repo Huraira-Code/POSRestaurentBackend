@@ -97,38 +97,37 @@ const deleteItemOfAdmin = async (req, res, next) => {
 const updateItemOfAdmin = async (req, res, next) => {
   try {
     const adminId = req.params.adminId;
-    const { itemId, name, price, categoryId, tax, options, discount } = req.body;
+    const { itemId, name, price, categoryId, tax, options, discount, status, description } = req.body;
 
     const existingItem = await Item.findById(itemId);
     if (!existingItem) {
-      return res.status(404).json({ success: false, message: 'Item not found' });
+      return res.status(404).json({ success: false, message: "Item not found" });
     }
 
-    // ✅ Update picture only if file is provided
+    // ✅ Update picture if file provided
     if (req.file?.path) {
       const cloudResult = await uploadToCloudinary(req.file.path);
       existingItem.pictureURL = cloudResult.secure_url;
     }
 
-    // ✅ Update individual fields only if provided
-    if (name) existingItem.name = name;
-    if (price) existingItem.price = price;
-    if (categoryId) existingItem.categoryId = categoryId;
-    if (discount) existingItem.discount = discount;
+    // ✅ Update fields directly (replace old values)
+    if (name !== undefined) existingItem.name = name;
+    if (price !== undefined) existingItem.price = price;
+    if (categoryId !== undefined) existingItem.categoryId = categoryId;
+    if (discount !== undefined) existingItem.discount = discount;
+    if (status !== undefined) existingItem.status = status;
+    if (description !== undefined) existingItem.description = description;
 
-    // ✅ Merge options if provided
-    if (options) {
+    // ✅ Replace options (not merge) if provided
+    if (options !== undefined) {
       const parsedOptions = typeof options === "string" ? JSON.parse(options) : options;
-      existingItem.options = [...existingItem.options, ...parsedOptions];
+      existingItem.options = parsedOptions;
     }
 
-    // ✅ Update tax if provided
-    if (tax) {
+    // ✅ Replace tax object if provided
+    if (tax !== undefined) {
       const parsedTax = typeof tax === "string" ? JSON.parse(tax) : tax;
-      existingItem.tax = {
-        ...existingItem.tax,
-        ...parsedTax
-      };
+      existingItem.tax = parsedTax;
     }
 
     await existingItem.save();
