@@ -2,8 +2,13 @@
 const mongoose = require('mongoose');
 
 const CounterSchema = new mongoose.Schema({
-  _id: {
-    type: String, // 'orderNumber' will be the unique identifier
+  adminId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+  },
+  counterName: {
+    type: String, // e.g., "orderNumber"
     required: true,
   },
   sequence_value: {
@@ -14,7 +19,10 @@ const CounterSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
-});
+}, { timestamps: true });
+
+// Ensure each admin has its own counter type (unique pair)
+CounterSchema.index({ adminId: 1, counterName: 1 }, { unique: true });
 
 const Counter = mongoose.model('Counter', CounterSchema);
 module.exports = Counter;

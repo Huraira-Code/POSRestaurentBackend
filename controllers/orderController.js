@@ -161,30 +161,32 @@ const createOrder = async (req, res, next) => {
 
     // --- Start: Atomic Counter Logic ---
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0); // normalize to midnight
 
     const nextOrderNumber = await Counter.findOneAndUpdate(
-      // Match the document for 'orderNumber'
-      // The OR condition ensures it finds the doc either when the date is old
-      // (to reset) or when the ID matches (to just increment).
       {
-        $or: [
-          { _id: "orderNumber", last_reset_date: { $lt: today } },
-          { _id: "orderNumber" },
-        ],
+        adminId: adminId, // ✅ each admin has its own counter
+        counterName: "orderNumber", // ✅ fixed counter name
       },
-      // If the first condition matches, reset and increment to 1.
-      // If the second matches, just increment.
-      // The `$inc` operator is atomic, preventing race conditions.
+      [
+        {
+          $set: {
+            sequence_value: {
+              $cond: [
+                { $lt: ["$last_reset_date", today] }, // agar purana hai toh reset
+                1, // reset to 1
+                { $add: ["$sequence_value", 1] }, // warna increment
+              ],
+            },
+            last_reset_date: today,
+          },
+        },
+      ],
       {
-        $set: { last_reset_date: today },
-        $inc: { sequence_value: 1 },
-      },
-      {
-        new: true, // Returns the updated document
-        upsert: true, // Creates the document if it doesn't exist
+        new: true,
+        upsert: true,
       }
-    ).then((doc) => doc.sequence_value); // Extract the new value directly
+    ).then((doc) => doc.sequence_value);
 
     // --- End: Atomic Counter Logic ---
 
@@ -309,7 +311,7 @@ const addItemsAndDealsToOrder = async (req, res, next) => {
         .status(404)
         .json({ success: false, message: "Order not found" });
     }
-    console.log("wafa na bewafi" ,existingOrder.paymentMethod )
+    console.log("wafa na bewafi", existingOrder.paymentMethod);
     // Init totals
     let totalAmount = 0;
     let totalTax = 0;
@@ -322,7 +324,7 @@ const addItemsAndDealsToOrder = async (req, res, next) => {
     let orderItems = [];
     if (cart && cart.length > 0) {
       orderItems = await Promise.all(
-        cart.map((item) => mapOrderItem(item, existingOrder.paymentMethod )) // <-- same helper you use in create
+        cart.map((item) => mapOrderItem(item, existingOrder.paymentMethod)) // <-- same helper you use in create
       );
 
       orderItems.forEach((it) => {
@@ -354,7 +356,9 @@ const addItemsAndDealsToOrder = async (req, res, next) => {
             throw new Error(`Deal ${deal.name} does not belong to this admin`);
 
           const dealQuantity = dealItem.quantity || 1;
-          const dealTaxRate = await deal.calculateTax(existingOrder.paymentMethod);
+          const dealTaxRate = await deal.calculateTax(
+            existingOrder.paymentMethod
+          );
           const totalDealPrice = dealItem.totalPrice * dealQuantity;
           const totalDealTax = totalDealPrice * (dealTaxRate / 100);
 
@@ -527,15 +531,17 @@ const printDailySalesReportAndCloseDay = async (req, res, next) => {
     // --- Reset Daily Counter ---
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+
+    // Reset counter for specific admin
     await Counter.findOneAndUpdate(
-      { _id: "orderNumber" },
+      { adminId, counterName: "orderNumber" }, // match admin + type of counter
       {
         $set: {
           sequence_value: 0,
           last_reset_date: today,
         },
       },
-      { upsert: true }
+      { upsert: true } // if not exists, create it
     );
 
     // --- Build Sales Report ---
@@ -567,14 +573,18 @@ const printDailySalesReportAndCloseDay = async (req, res, next) => {
           CARD: parseFloat(paymentMethodSummaryPaid.CARD.toFixed(2)),
           ONLINE: parseFloat(paymentMethodSummaryPaid.ONLINE.toFixed(2)),
           COD: parseFloat(paymentMethodSummaryPaid.COD.toFixed(2)),
-          on_arrival: parseFloat(paymentMethodSummaryPaid.on_arrival.toFixed(2)),
+          on_arrival: parseFloat(
+            paymentMethodSummaryPaid.on_arrival.toFixed(2)
+          ),
         },
         UNPAID: {
           CASH: parseFloat(paymentMethodSummaryUnpaid.CASH.toFixed(2)),
           CARD: parseFloat(paymentMethodSummaryUnpaid.CARD.toFixed(2)),
           ONLINE: parseFloat(paymentMethodSummaryUnpaid.ONLINE.toFixed(2)),
           COD: parseFloat(paymentMethodSummaryUnpaid.COD.toFixed(2)),
-          on_arrival: parseFloat(paymentMethodSummaryUnpaid.on_arrival.toFixed(2)),
+          on_arrival: parseFloat(
+            paymentMethodSummaryUnpaid.on_arrival.toFixed(2)
+          ),
         },
       },
     };
@@ -590,7 +600,6 @@ const printDailySalesReportAndCloseDay = async (req, res, next) => {
     next(error);
   }
 };
-
 
 const updateOrder = async (req, res, next) => {
   try {
@@ -2224,5 +2233,5 @@ module.exports = {
   generateCustomerReceipts,
   printDailySalesReportAndCloseDay,
   updatePaymentMethod,
-  addItemsAndDealsToOrder
+  addItemsAndDealsToOrder,
 };
