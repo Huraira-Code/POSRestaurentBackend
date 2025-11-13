@@ -814,7 +814,7 @@ const Bill = () => {
                 Order Type
               </label>
               <div className="space-y-2">
-                {["DINE", "DELIVERY", "PICKUP", "FOODPANDA"].map((type) => (
+                {["DINE", "DELIVERY", "PICKUP", "FOODPANDA", "FREE FOOD" , "MARKETING"].map((type) => (
                   <button
                     key={type}
                     onClick={() => {
@@ -837,6 +837,8 @@ const Bill = () => {
                         {type === "DELIVERY" && "Food delivered to customer"}
                         {type === "PICKUP" && "Customer picks up order"}
                         {type === "FOODPANDA" && "Rider picks up order"}
+                        {type === "FREE FOOD" && "Food Given away for Free"}
+                        {type === "MARKETING" && "Food Consumed for marketing Purpose"}
                       </div>
                     </div>
                   </button>

@@ -57,14 +57,18 @@ const DailySalesReportModal = ({ isOpen, onClose, reportData }) => {
                 {reportData.totalOrdersClosed}
               </p>
               <p>
-                <strong className="text-[#f6b100]">Total Sales Amount Without Delivery:</strong>{" "}
-                {formatPrice(reportData.totalSalesAmount - reportData.totalDeliveryFees)}
+                <strong className="text-[#f6b100]">
+                  Total Sales Amount Without Delivery:
+                </strong>{" "}
+                {formatPrice(
+                  reportData.totalSalesAmount - reportData.totalDeliveryFees
+                )}
               </p>
               <p>
                 <strong className="text-[#f6b100]">Total Delivery Fees:</strong>{" "}
                 {formatPrice(reportData.totalDeliveryFees)}
               </p>
-               <p>
+              <p>
                 <strong className="text-[#f6b100]">Total Sales Amount:</strong>{" "}
                 {formatPrice(reportData.totalSalesAmount)}
               </p>
@@ -119,6 +123,49 @@ const DailySalesReportModal = ({ isOpen, onClose, reportData }) => {
                   )}
                 </div>
               )}
+              {/* Payment Breakdown by Type */}
+              {reportData.paymentBreakdownByType && (
+                <div className="border-t border-[#2a2a2a] pt-4 mt-4">
+                  <h3 className="text-lg font-semibold text-[#f6b100] mb-2">
+                    Payment Breakdown by Type:
+                  </h3>
+
+                  <div className="space-y-4">
+                    {Object.entries(reportData.paymentBreakdownByType).map(
+                      ([type, statusData]) => (
+                        <div key={type} className="bg-[#262626] p-3 rounded-md">
+                          <h4 className="font-semibold text-[#f5f5f5] mb-2">
+                            {type}
+                          </h4>
+
+                          {/* Loop through PAID / UNPAID inside each type */}
+                          {Object.entries(statusData).map(
+                            ([status, methods]) => (
+                              <div key={status} className="mb-2">
+                                <p className="text-[#f6b100] font-medium mb-1">
+                                  {status}
+                                </p>
+                                <ul className="list-disc list-inside text-sm text-[#a0a0a0] space-y-1">
+                                  {Object.entries(methods).map(
+                                    ([method, amount]) => (
+                                      <li key={method}>
+                                        {method}:{" "}
+                                        <strong className="text-[#f5f5f5]">
+                                          {formatPrice(amount)}
+                                        </strong>
+                                      </li>
+                                    )
+                                  )}
+                                </ul>
+                              </div>
+                            )
+                          )}
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Items Sold Summary */}
               {/* Items Sold Summary */}
@@ -130,19 +177,23 @@ const DailySalesReportModal = ({ isOpen, onClose, reportData }) => {
                     </h3>
 
                     {(() => {
-                      // Group items by name
+                      // Group items by name (use completeItem if available)
                       const groupedItems = reportData.itemsSoldSummary.reduce(
                         (acc, item) => {
-                          if (!acc[item.name]) {
-                            acc[item.name] = {
-                              name: item.name,
+                          const name = item.completeItem?.name || item.name;
+                          const price = item.completeItem?.price || item.price;
+
+                          if (!acc[name]) {
+                            acc[name] = {
+                              name,
                               quantity: 1,
-                              totalPrice: item.price,
+                              totalPrice: price,
                             };
                           } else {
-                            acc[item.name].quantity += 1;
-                            acc[item.name].totalPrice += item.price;
+                            acc[name].quantity += 1;
+                            acc[name].totalPrice += price;
                           }
+
                           return acc;
                         },
                         {}

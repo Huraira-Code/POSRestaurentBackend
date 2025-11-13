@@ -26,6 +26,7 @@ import {
   getReceiptsByAdmin,
   getOrdersByAdmin,
   exportOrdersToExcel,
+  getAnalyticsByAdmin,
   getAllVouchers,
   getVouchersByAdmin,
   deleteVoucher,
@@ -189,11 +190,19 @@ const SuperAdmin = () => {
   }, [isAdminDropdownOpen]);
   // Analytics states
   const [adminOrders, setAdminOrders] = useState([]);
+  const [adminInsightOrders, setAdminInsightOrders] = useState([]);
+
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+
   const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [isExportingSingleOrder, setIsExportingSingleOrder] = useState(false);
   const [ordersError, setOrdersError] = useState("");
   const [searchOrderId, setSearchOrderId] = useState("");
+  const [selectedDate, setSelectedDate] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMoreOrders, setHasMoreOrders] = useState(true); // for "Load more" logic
+
   const [displayedOrdersCount, setDisplayedOrdersCount] = useState(5);
   const [selectedOrderForDetails, setSelectedOrderForDetails] = useState(null);
   const [analyticsData, setAnalyticsData] = useState({
@@ -405,10 +414,115 @@ const SuperAdmin = () => {
     }
   }, []);
 
-  // Fetch orders and calculate analytics for specific admin
-  const fetchOrdersAndAnalytics = useCallback(async (adminId) => {
+  const handleLoadMore = () => {
+    if (hasMoreOrders) {
+      const nextPage = currentPage + 1;
+      setCurrentPage(nextPage);
+      fetchOrders(nextPage);
+    }
+  };
+
+  // ✅ Automatically fetch analytics when Insights is selected
+  useEffect(() => {
+    if (adminDetailView === "Insights" && selectedAdmin?._id) {
+      fetchAnalytics(selectedAdmin._id);
+      console.log("zakir khan", selectedAdmin._id);
+    }
+    console.log("fchgddhsfn");
+  }, [adminDetailView, selectedAdmin?._id]);
+
+  const fetchOrdersAndAnalytics = useCallback(
+    async (adminId) => {
+      if (!adminId) {
+        setAdminOrders([]);
+        setAnalyticsData({
+          totalSales: 0,
+          totalOrders: 0,
+          averageOrderValue: 0,
+          topSellingItems: [],
+          salesByDate: [],
+          recentTransactions: [],
+        });
+        return;
+      }
+
+      setIsLoadingOrders(true);
+      setOrdersError("");
+
+      try {
+        const page = currentPage || 1;
+        const limit = 10;
+        const selectedDated = selectedDate || null;
+
+        const response = await getOrdersByAdmin(
+          adminId,
+          page,
+          limit,
+          selectedDated
+        );
+        console.log("Orders fetch response:", response.data);
+
+        if (response.data?.success) {
+          const orders = response.data.data || [];
+          const hasMore = response.data.hasMore ?? false;
+
+          console.log("Processing orders count:", orders.length);
+
+          // ✅ Validate and filter orders
+          const validOrders = orders.filter((order) => {
+            if (!order) return false;
+            if (typeof order.totalAmount !== "number" && !order.totalAmount) {
+              console.warn("Order missing totalAmount:", order._id);
+            }
+            return true;
+          });
+
+          // ✅ Sort by most recent first
+          const sortedOrders = validOrders.sort((a, b) => {
+            const dateA = new Date(a.createdAt || new Date());
+            const dateB = new Date(b.createdAt || new Date());
+            return dateB.getTime() - dateA.getTime();
+          });
+
+          // ✅ Append or replace orders depending on page
+          setAdminOrders((prevOrders) =>
+            page === 1 ? sortedOrders : [...prevOrders, ...sortedOrders]
+          );
+
+          // ✅ Update pagination state
+          setHasMoreOrders(hasMore);
+
+          // ✅ Calculate analytics only from *all* loaded orders
+          const allOrders =
+            page === 1 ? sortedOrders : [...adminOrders, ...sortedOrders];
+
+          const analytics = calculateAnalytics(allOrders);
+          setAnalyticsData(analytics);
+        } else {
+          throw new Error("Failed to fetch orders");
+        }
+      } catch (error) {
+        console.error("Error fetching orders for admin:", error);
+        setOrdersError("Error loading orders data. Please try again.");
+        setAdminOrders([]);
+        setAnalyticsData({
+          totalSales: 0,
+          totalOrders: 0,
+          averageOrderValue: 0,
+          topSellingItems: [],
+          salesByDate: [],
+          recentTransactions: [],
+        });
+      } finally {
+        setIsLoadingOrders(false);
+      }
+    },
+    [selectedDate, currentPage] // ✅ re-run when date or page changes
+  );
+
+  const fetchAnalytics = useCallback(async (adminId) => {
     if (!adminId) {
-      setAdminOrders([]);
+      setAdminInsightOrders([]);
       setAnalyticsData({
         totalSales: 0,
         totalOrders: 0,
@@ -420,10 +534,10 @@ const SuperAdmin = () => {
       return;
     }
 
-    setIsLoadingOrders(true);
+    setIsLoadingAnalytics(true);
     setOrdersError("");
     try {
-      const response = await getOrdersByAdmin(adminId);
+      const response = await getAnalyticsByAdmin(adminId);
       console.log("Orders fetch response:", response.data);
       if (response.data?.success) {
         const orders = response.data.data || [];
@@ -447,7 +561,7 @@ const SuperAdmin = () => {
           return dateB.getTime() - dateA.getTime(); // Most recent first
         });
 
-        setAdminOrders(sortedOrders);
+        setAdminInsightOrders(sortedOrders);
 
         // Calculate analytics from sorted orders
         const analytics = calculateAnalytics(sortedOrders);
@@ -455,7 +569,7 @@ const SuperAdmin = () => {
         setAnalyticsData(analytics);
       } else {
         setOrdersError("Failed to fetch orders");
-        setAdminOrders([]);
+        setAdminInsightOrders([]);
         setAnalyticsData({
           totalSales: 0,
           totalOrders: 0,
@@ -468,7 +582,7 @@ const SuperAdmin = () => {
     } catch (error) {
       console.error("Error fetching orders for admin:", error);
       setOrdersError("Error loading orders data. Please try again.");
-      setAdminOrders([]);
+      setAdminInsightOrders([]);
       setAnalyticsData({
         totalSales: 0,
         totalOrders: 0,
@@ -478,7 +592,7 @@ const SuperAdmin = () => {
         recentTransactions: [],
       });
     } finally {
-      setIsLoadingOrders(false);
+      setIsLoadingAnalytics(false);
     }
   }, []);
 
@@ -584,63 +698,63 @@ const SuperAdmin = () => {
       });
     }
 
-    orders.forEach((order) => {
-      try {
-        // Validate and parse the order date
-        if (order.endOfDayClosedData) {
-          const orderDate = new Date(order.endOfDayClosedData);
-          // Check if date is valid
-          if (!isNaN(orderDate.getTime())) {
-            const orderDateString = orderDate.toISOString().split("T")[0];
-            const dayIndex = last30Days.findIndex(
-              (day) => day.date === orderDateString
-            );
-            if (dayIndex !== -1) {
-              let orderTotal = 0;
-              if (order.items && order.items.length > 0) {
-                order.items.forEach((item) => {
-                  const basePrice =
-                    item.basePrice || item.originalPrice || item.price || 0;
-                  const options = item.options || [];
-                  const optionsPrice = options.reduce(
-                    (sum, opt) => sum + (opt.price || 0),
-                    0
-                  );
-                  const discount = item.discount || item.itemDiscount || 0;
-                  const quantity = item.quantity || 1;
+    // orders.forEach((order) => {
+    //   try {
+    //     // Validate and parse the order date
+    //     if (order.endOfDayClosedData) {
+    //       const orderDate = new Date(order.endOfDayClosedData);
+    //       // Check if date is valid
+    //       if (!isNaN(orderDate.getTime())) {
+    //         const orderDateString = orderDate.toISOString().split("T")[0];
+    //         const dayIndex = last30Days.findIndex(
+    //           (day) => day.date === orderDateString
+    //         );
+    //         if (dayIndex !== -1) {
+    //           let orderTotal = 0;
+    //           if (order.items && order.items.length > 0) {
+    //             order.items.forEach((item) => {
+    //               const basePrice =
+    //                 item.basePrice || item.originalPrice || item.price || 0;
+    //               const options = item.options || [];
+    //               const optionsPrice = options.reduce(
+    //                 (sum, opt) => sum + (opt.price || 0),
+    //                 0
+    //               );
+    //               const discount = item.discount || item.itemDiscount || 0;
+    //               const quantity = item.quantity || 1;
 
-                  const paymentMethod =
-                    order.paymentMethod || order.paymentType || "CASH";
-                  const taxRates = item.tax || { card: "0", cash: "0" };
-                  const taxRate =
-                    paymentMethod === "CARD"
-                      ? parseFloat(taxRates.card || "0")
-                      : parseFloat(taxRates.cash || "0");
+    //               const paymentMethod =
+    //                 order.paymentMethod || order.paymentType || "CASH";
+    //               const taxRates = item.tax || { card: "0", cash: "0" };
+    //               const taxRate =
+    //                 paymentMethod === "CARD"
+    //                   ? parseFloat(taxRates.card || "0")
+    //                   : parseFloat(taxRates.cash || "0");
 
-                  const originalAmount = basePrice + optionsPrice;
-                  const taxAmount = (originalAmount * taxRate) / 100;
-                  const finalPrice = originalAmount - discount + taxAmount;
+    //               const originalAmount = basePrice + optionsPrice;
+    //               const taxAmount = (originalAmount * taxRate) / 100;
+    //               const finalPrice = originalAmount - discount + taxAmount;
 
-                  orderTotal += finalPrice * quantity;
-                });
-              }
-                                     orderTotal = order.totalAmount
+    //               orderTotal += finalPrice * quantity;
+    //             });
+    //           }
+    //                                  orderTotal = order.totalAmount
 
-              const finalAmount = orderTotal - (order.voucherDiscount || 0);
-              console.log("value point data" , finalAmount)
-              last30Days[dayIndex].sales += finalAmount;
-              last30Days[dayIndex].orders += 1;
-            }
-          }
-        }
-      } catch (dateError) {
-        console.warn(
-          "Invalid date found in order:",
-          order._id,
-          order.endOfDayClosedData
-        );
-      }
-    });
+    //           const finalAmount = orderTotal - (order.voucherDiscount || 0);
+    //           console.log("value point data" , finalAmount)
+    //           last30Days[dayIndex].sales += finalAmount;
+    //           last30Days[dayIndex].orders += 1;
+    //         }
+    //       }
+    //     }
+    //   } catch (dateError) {
+    //     console.warn(
+    //       "Invalid date found in order:",
+    //       order._id,
+    //       order.endOfDayClosedData
+    //     );
+    //   }
+    // });
 
     // Calculate top selling items
     const itemCounts = {};
@@ -741,6 +855,67 @@ const SuperAdmin = () => {
       },
     };
   };
+
+  // const fetchAnalytics = useCallback(
+  //   async (adminId) => {
+  //     if (!adminId) {
+  //       setAnalyticsData({
+  //         totalSales: 0,
+  //         totalOrders: 0,
+  //         averageOrderValue: 0,
+  //         topSellingItems: [],
+  //         salesByDate: [],
+  //         recentTransactions: [],
+  //         dealMetrics: {},
+  //       });
+  //       return;
+  //     }
+  //     console.log("djgj we are me");
+
+  //     setIsLoadingAnalytics(true);
+  //     // setOrdersError("");
+
+  //     try {
+  //       const selectedDated = selectedDate || null;
+  //       const response = await getAnalyticsByAdmin(adminId);
+
+  //       console.log("Analytics fetch response:", response.data);
+
+  //       if (response.data?.success) {
+  //         const analytics = response.data.data;
+
+  //         // ✅ Ensure safe structure before setting
+  //         setAnalyticsData({
+  //           totalSales: analytics.totalSales || 0,
+  //           totalOrders: analytics.totalOrders || 0,
+  //           averageOrderValue: analytics.averageOrderValue || 0,
+  //           topSellingItems: analytics.topSellingItems || [],
+  //           salesByDate: analytics.salesByDate || [],
+  //           recentTransactions: analytics.recentTransactions || [],
+  //           dealMetrics: analytics.dealMetrics || {},
+  //         });
+  //       } else {
+  //         throw new Error("Failed to fetch analytics");
+  //       }
+  //     } catch (error) {
+  //       console.error("Error fetching analytics for admin:", error);
+  //       setOrdersError("Error loading analytics data. Please try again.");
+  //       setAnalyticsData({
+  //         totalSales: 0,
+  //         totalOrders: 0,
+  //         averageOrderValue: 0,
+  //         topSellingItems: [],
+  //         salesByDate: [],
+  //         recentTransactions: [],
+  //         dealMetrics: {},
+  //       });
+  //     } finally {
+  //       setIsLoadingAnalytics(false);
+  //     }
+  //     console.log("me4", adminId);
+  //   },
+  //   [selectedDate] // ✅ re-run when date changes
+  // );
 
   // Handle Excel export
   const handleExportToExcel = async (adminId) => {
@@ -1836,7 +2011,6 @@ const SuperAdmin = () => {
     }
   };
 
- 
   return (
     <div className="min-h-screen bg-[#0a0a0a] p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
@@ -1914,6 +2088,13 @@ const SuperAdmin = () => {
         {activeTab === "All Admins" && (
           <AllAdminsTab
             // State props
+            adminInsightOrders={adminInsightOrders}
+            isLoadingAnalytics={isLoadingAnalytics}
+            fetchAnalytics={fetchAnalytics}
+            handleLoadMore={handleLoadMore}
+            hasMoreOrders={hasMoreOrders}
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
             selectedAdmin={selectedAdmin}
             setSelectedAdmin={setSelectedAdmin}
             isAdminDropdownOpen={isAdminDropdownOpen}
@@ -2157,12 +2338,12 @@ const SuperAdmin = () => {
 
         {/* Delete Voucher Confirmation Modal */}
         {showDeleteVoucherModal && voucherToDelete && (
-           <DeleteVoucherModal
-    voucherToDelete={voucherToDelete}
-    handleCancelDeleteVoucher={handleCancelDeleteVoucher}
-    handleDeleteVoucher={handleDeleteVoucher}
-    isDeletingVoucher={isDeletingVoucher}
-  />
+          <DeleteVoucherModal
+            voucherToDelete={voucherToDelete}
+            handleCancelDeleteVoucher={handleCancelDeleteVoucher}
+            handleDeleteVoucher={handleDeleteVoucher}
+            isDeletingVoucher={isDeletingVoucher}
+          />
         )}
 
         {/* Create Deal Modal */}

@@ -64,6 +64,50 @@ const ReceiptPrintModal = ({ isOpen, onClose, reportData }) => {
     `;
       })
       .join("");
+const BreakDown = Object.entries(reportData.paymentBreakdownByType)
+  .map(([type, statusData]) => {
+    // Calculate total for this type
+    const typeTotal = Object.values(statusData).reduce(
+      (sum, methods) =>
+        sum +
+        Object.values(methods).reduce((innerSum, val) => innerSum + val, 0),
+      0
+    );
+
+    // Skip empty data
+    if (typeTotal === 0) return "";
+
+    // Loop through PAID / UNPAID
+    const statusBlocks = Object.entries(statusData)
+      .map(([status, methods]) => {
+        // Total per status
+        const totalRow = `<tr>
+          <td><strong>Total ${status}</strong></td>
+          <td style="text-align:right;"><strong>${Object.values(methods)
+            .reduce((a, b) => a + b, 0)
+            .toFixed(2)}</strong></td>
+        </tr>`;
+
+        return `
+          <table class="receipt-table" style="margin-top:4px; width:100%; border-collapse: collapse;">
+            <tbody>
+              ${totalRow}
+            </tbody>
+          </table>
+        `;
+      })
+      .join("");
+
+    return `
+      <div class="payment-type-section" style="margin-bottom:10px;">
+        <h3 style="margin-top:6px; margin-bottom:0px; font-weight:bold;">${type}</h3>
+        ${statusBlocks}
+        <hr style="border-top:1px dashed #ccc; margin-top:6px;"/>
+      </div>
+    `;
+  })
+  .join("");
+
 
     // Generate table rows
     const itemRows = groupedItems
@@ -720,7 +764,7 @@ font-weight:600;
           </table>
         </div>
          ${paymentBlock}
-
+          ${BreakDown}
 
        
 
@@ -1430,11 +1474,77 @@ font-weight:600;
                   )}
                 </div>
               )}
+              {reportData.paymentBreakdownByType && (
+                <div className="mt-3">
+                  <div className="line border-t border-dashed border-gray-400"></div>
+                  <h3 className="section-title font-semibold mt-2">
+                    Payment Breakdown by Type
+                  </h3>
+
+                  {Object.entries(reportData.paymentBreakdownByType).map(
+                    ([type, statusData], idx) => {
+                      // Calculate total for this type
+                      const typeTotal = Object.values(statusData).reduce(
+                        (sum, methods) => {
+                          return (
+                            sum +
+                            Object.values(methods).reduce(
+                              (innerSum, val) => innerSum + val,
+                              0
+                            )
+                          );
+                        },
+                        0
+                      );
+
+                      // Skip empty data (optional)
+                      if (typeTotal === 0) return null;
+
+                      return (
+                        <div key={idx} className="mt-3">
+                          {/* Type Header */}
+                          <div className="flex justify-between text-sm font-semibold mt-1">
+                            <span>{type}</span>
+                          </div>
+
+                          {/* Loop through PAID / UNPAID */}
+                          {Object.entries(statusData).map(
+                            ([status, methods], i) => (
+                              <div key={i} className="mt-1">
+                                {/* Optional total per status */}
+                                <div
+                                  className="flex justify-between mt-1 text-xs"
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                  }}
+                                >
+                                  <span>Total {status}</span>
+                                  <span>
+                                    {formatPrice(
+                                      Object.values(methods).reduce(
+                                        (a, b) => a + b,
+                                        0
+                                      )
+                                    )}
+                                  </span>
+                                </div>
+                              </div>
+                            )
+                          )}
+
+                          <div className="border-b border-dashed border-gray-400 mt-2"></div>
+                        </div>
+                      );
+                    }
+                  )}
+                </div>
+              )}
 
               <div className="line border-t border-dashed border-gray-400"></div>
 
               {/* Totals */}
-              <div className="text-sm">
+              <div className="text-sm mt-4">
                 <p
                   className="flex justify-between font-semibold"
                   style={{ display: "flex", justifyContent: "space-between" }}

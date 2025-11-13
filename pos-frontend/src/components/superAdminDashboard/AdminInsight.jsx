@@ -5,7 +5,8 @@ import DateFilter from "./DateFilters";
 
 const AdminInsights = ({
   selectedAdmin,
-  adminOrders,
+  isLoadingAnalytics,
+  adminInsightOrders,
   analyticsData,
   isLoadingOrders,
   isExportingExcel,
@@ -18,22 +19,12 @@ const AdminInsights = ({
   const [selectedOrderForDetails, setSelectedOrderForDetails] = useState(null);
   const [isExportingSingleOrder, setIsExportingSingleOrder] = useState(false);
   // Helper function to calculate order total
-  console.log("admin Orders", adminOrders);
+  console.log("admin Orders", adminInsightOrders);
   console.log("analytics Data", analyticsData);
   // Show loading state when orders are loading
-  if (isLoadingOrders) {
-    return (
-      <div className="bg-[#1a1a1a] rounded-lg p-8 text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#10b981] mx-auto mb-4"></div>
-        <p className="text-[#a0a0a0]">Loading analytics data...</p>
-        <p className="text-[#606060] text-sm mt-2">
-          Crunching the numbers for insights
-        </p>
-      </div>
-    );
-  }
+  
   const calculateOrderTotal = (order) => {
-    console.log("order",order)
+    console.log("order", order.totalAmount);
     let total = 0;
 
     // // Process items
@@ -77,7 +68,7 @@ const AdminInsights = ({
     // }
 
     // Apply voucher discount
-    total = order.totalAmount;
+    total = order.totalAmount; // this include delivery fees
     const voucherDiscount = order.voucherDiscount || 0;
     total -= voucherDiscount;
 
@@ -95,9 +86,17 @@ const AdminInsights = ({
 
   // Filter orders based on date range
   const filteredOrders = useMemo(() => {
-    if (!adminOrders) return [];
+    if (!adminInsightOrders) return [];
 
-    let orders = [...adminOrders];
+    let orders = [...adminInsightOrders];
+
+    // Always filter only completed, EOD closed, and paid
+    orders = orders.filter(
+      (order) =>
+        order.orderStatus === "COMPLETED" &&
+        order.isEndOfDayClosed === true &&
+        order.paymentStatus === "PAID"
+    );
 
     // Apply date filter
     if (dateFilter.startDate && dateFilter.endDate) {
@@ -110,170 +109,203 @@ const AdminInsights = ({
     }
 
     return orders;
-  }, [adminOrders, dateFilter]);
+  }, [adminInsightOrders, dateFilter]);
 
-  // Calculate analytics from filtered orders
-const filteredData = useMemo(() => {
-  if (!analyticsData || !filteredOrders) return null;
+  console.log("filtered Orders now", filteredOrders);
 
-  // Helper: filter orders by dateFilter
-  const isWithinDateFilter = (dateStr) => {
-    if (!dateFilter.startDate || !dateFilter.endDate) return true;
-    const date = new Date(dateStr);
-    return date >= dateFilter.startDate && date <= dateFilter.endDate;
-  };
+    // Calculate analytics from filtered orders
+    const filteredData = useMemo(() => {
+      if (!analyticsData || !filteredOrders) return null;
 
-  // Filter orders by dateFilter
-  const ordersInRange = filteredOrders.filter(order => 
-    order.createdAt && isWithinDateFilter(order.createdAt)
-  );
+      // Helper: filter orders by dateFilter
+      const isWithinDateFilter = (dateStr) => {
+        if (!dateFilter.startDate || !dateFilter.endDate) return true;
+        const date = new Date(dateStr);
+        return date >= dateFilter.startDate && date <= dateFilter.endDate;
+      };
 
-  // Calculate sales by date
-  const salesByDateMap = {};
-  ordersInRange.forEach(order => {
-    const orderDate = new Date(order.createdAt).toISOString().split("T")[0];
-    const orderTotal = calculateOrderTotal(order);
+      // ✅ Step 1: use `isEndOfDayClosedDate` if available, otherwise `createdAt`
+      const getOrderDate = (order) =>
+        order.isEndOfDayClosedDate || order.createdAt;
 
-    if (!salesByDateMap[orderDate]) {
-      salesByDateMap[orderDate] = { date: orderDate, sales: 0, orders: 0 };
-    }
+      // ✅ Step 2: Filter orders using getOrderDate
+      const ordersInRange = filteredOrders.filter((order) => {
+        const dateToCheck = getOrderDate(order);
+        return dateToCheck && isWithinDateFilter(dateToCheck);
+      });
 
-    salesByDateMap[orderDate].sales += orderTotal;
-    salesByDateMap[orderDate].orders += 1;
-  });
+      // Calculate sales by date
+      const salesByDateMap = {};
+      ordersInRange.forEach((order) => {
+        const orderDate = new Date(getOrderDate(order))
+          .toISOString()
+          .split("T")[0];
+        const orderTotal = calculateOrderTotal(order);
 
-  const filteredSalesByDate = Object.values(salesByDateMap).sort(
-    (a, b) => new Date(a.date) - new Date(b.date)
-  );
+        if (!salesByDateMap[orderDate]) {
+          salesByDateMap[orderDate] = { date: orderDate, sales: 0, orders: 0 };
+        }
 
+        salesByDateMap[orderDate].sales += orderTotal;
+        salesByDateMap[orderDate].orders += 1;
+      });
 
-  console.log("filtered yesterday",filteredSalesByDate )
-  // Total sales and orders
-  const totalSales = filteredSalesByDate.reduce((sum, item) => sum + item.sales, 0);
-  const totalOrders = filteredSalesByDate.reduce((sum, item) => sum + item.orders, 0);
-  const averageOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
-  console.log("order in ranga",ordersInRange)
-  // Top-selling items
-  const itemSalesMap = {};
-  ordersInRange.forEach(order => {
-    order.items?.forEach(item => {
-      const itemName = item.name;
-      const quantity = item.quantity || 1;
-      const basePrice = item.basePrice || item.price || 0;
-      const optionsPrice = (item.selectedOptions || []).reduce((sum, opt) => sum + (opt.price || 0), 0);
-      const discount = item.discount || 0;
+      const filteredSalesByDate = Object.values(salesByDateMap).sort(
+        (a, b) => new Date(a.date) - new Date(b.date)
+      );
 
-      // const totalItemPrice = (basePrice + optionsPrice - discount) * quantity;
-       const totalItemPrice = (basePrice + optionsPrice - discount) * quantity;
+      // Total sales and orders
+      const totalSales = filteredSalesByDate.reduce(
+        (sum, item) => sum + item.sales,
+        0
+      );
+      const totalOrders = filteredSalesByDate.reduce(
+        (sum, item) => sum + item.orders,
+        0
+      );
+      const averageOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
+      console.log("order in range", ordersInRange);
 
-      if (!itemSalesMap[itemName]) {
-        itemSalesMap[itemName] = { name: itemName, quantity: 0, totalRevenue: 0 };
-      }
+      // Top-selling items
+      const itemSalesMap = {};
+      ordersInRange.forEach((order) => {
+        order.items?.forEach((item) => {
+          const itemName = item.name;
+          const quantity = item.quantity || 1;
+          const basePrice = item.basePrice || item.price || 0;
+          const optionsPrice = (item.selectedOptions || []).reduce(
+            (sum, opt) => sum + (opt.price || 0),
+            0
+          );
+          const discount = item.discount || 0;
 
-      itemSalesMap[itemName].quantity += quantity;
-      itemSalesMap[itemName].totalRevenue += totalItemPrice;
-    });
+          const totalItemPrice = (basePrice + optionsPrice - discount) * quantity;
 
-    order.deals?.forEach(deal => {
-      const dealName = deal.name;
-      const quantity = deal.quantity || 1;
-      const dealPrice = parseFloat(deal.dealPrice) || 0;
-      const totalDealPrice = dealPrice * quantity;
+          if (!itemSalesMap[itemName]) {
+            itemSalesMap[itemName] = {
+              name: itemName,
+              quantity: 0,
+              totalRevenue: 0,
+            };
+          }
 
-      if (!itemSalesMap[dealName]) {
-        itemSalesMap[dealName] = { name: dealName, quantity: 0, totalRevenue: 0 };
-      }
+          itemSalesMap[itemName].quantity += quantity;
+          itemSalesMap[itemName].totalRevenue += totalItemPrice;
+        });
 
-      itemSalesMap[dealName].quantity += quantity;
-      itemSalesMap[dealName].totalRevenue += totalDealPrice;
-    });
+        order.deals?.forEach((deal) => {
+          const dealName = deal.name;
+          const quantity = deal.quantity || 1;
+          const dealPrice = parseFloat(deal.dealPrice) || 0;
+          const totalDealPrice = dealPrice * quantity;
 
+          if (!itemSalesMap[dealName]) {
+            itemSalesMap[dealName] = {
+              name: dealName,
+              quantity: 0,
+              totalRevenue: 0,
+            };
+          }
 
-  });
-  console.log("order in ranga 2",itemSalesMap)
+          itemSalesMap[dealName].quantity += quantity;
+          itemSalesMap[dealName].totalRevenue += totalDealPrice;
+        });
+      });
 
+      console.log("order in range 2", itemSalesMap);
 
-  const topSellingItems = Object.values(itemSalesMap).sort(
-    (a, b) => b.totalRevenue - a.totalRevenue
-  );
-  console.log("topSellingItems",topSellingItems)
+      const topSellingItems = Object.values(itemSalesMap).sort(
+        (a, b) => b.totalRevenue - a.totalRevenue
+      );
+      console.log("topSellingItems", topSellingItems);
 
-  // Deal metrics
-  const dealMetricsMap = {};
-  let totalDealsSold = 0;
-  let totalDealRevenue = 0;
-  let totalDealsSavings = 0;
+      // Deal metrics
+      const dealMetricsMap = {};
+      let totalDealsSold = 0;
+      let totalDealRevenue = 0;
+      let totalDealsSavings = 0;
 
-  ordersInRange.forEach(order => {
-    order.deals?.forEach(deal => {
-      const dealName = deal.name;
-      const quantity = deal.quantity || 1;
-      const dealPrice = parseFloat(deal.dealPrice) || 0;
-      const savings = deal.savings || 0;
+      ordersInRange.forEach((order) => {
+        order.deals?.forEach((deal) => {
+          const dealName = deal.name;
+          const quantity = deal.quantity || 1;
+          const dealPrice = parseFloat(deal.dealPrice) || 0;
+          const savings = deal.savings || 0;
 
-      totalDealsSold += quantity;
-      totalDealRevenue += dealPrice * quantity;
-      totalDealsSavings += savings * quantity;
+          totalDealsSold += quantity;
+          totalDealRevenue += dealPrice * quantity;
+          totalDealsSavings += savings * quantity;
 
-      if (!dealMetricsMap[dealName]) {
-        dealMetricsMap[dealName] = { name: dealName, quantity: 0, totalRevenue: 0, totalSavings: 0 };
-      }
+          if (!dealMetricsMap[dealName]) {
+            dealMetricsMap[dealName] = {
+              name: dealName,
+              quantity: 0,
+              totalRevenue: 0,
+              totalSavings: 0,
+            };
+          }
 
-      dealMetricsMap[dealName].quantity += quantity;
-      dealMetricsMap[dealName].totalRevenue += dealPrice * quantity;
-      dealMetricsMap[dealName].totalSavings += savings * quantity;
-    });
-  });
+          dealMetricsMap[dealName].quantity += quantity;
+          dealMetricsMap[dealName].totalRevenue += dealPrice * quantity;
+          dealMetricsMap[dealName].totalSavings += savings * quantity;
+        });
+      });
 
-  const topDeals = Object.values(dealMetricsMap).sort(
-    (a, b) => b.totalRevenue - a.totalRevenue
-  );
+      const topDeals = Object.values(dealMetricsMap).sort(
+        (a, b) => b.totalRevenue - a.totalRevenue
+      );
 
-  const dealPercentageOfSales = totalSales > 0 ? (totalDealRevenue / totalSales) * 100 : 0;
+      const dealPercentageOfSales =
+        totalSales > 0 ? (totalDealRevenue / totalSales) * 100 : 0;
 
-  // Filter recent transactions
-  const filteredRecentTransactions = (analyticsData.recentTransactions || []).filter(transaction => 
-    !dateFilter.startDate || !dateFilter.endDate || isWithinDateFilter(transaction.date)
-  );
+      // Filter recent transactions
+      const filteredRecentTransactions = (
+        analyticsData.recentTransactions || []
+      ).filter(
+        (transaction) =>
+          !dateFilter.startDate ||
+          !dateFilter.endDate ||
+          isWithinDateFilter(transaction.date)
+      );
 
-  return {
-    ...analyticsData,
-    totalSales,
-    totalOrders,
-    averageOrderValue,
-    salesByDate: filteredSalesByDate,
-    recentTransactions: filteredRecentTransactions,
-    topSellingItems,
-    dealMetrics: {
-      totalDealRevenue,
-      totalDealsSold,
-      totalDealsSavings,
-      dealPercentageOfSales,
-      topDeals,
-    },
-    _isFiltered: dateFilter.type !== "all",
-    _originalTotalSales: analyticsData.totalSales,
-    _originalTotalOrders: analyticsData.totalOrders,
-  };
-}, [analyticsData, filteredOrders, dateFilter]);
+      return {
+        ...analyticsData,
+        totalSales,
+        totalOrders,
+        averageOrderValue,
+        salesByDate: filteredSalesByDate,
+        recentTransactions: filteredRecentTransactions,
+        topSellingItems,
+        dealMetrics: {
+          totalDealRevenue,
+          totalDealsSold,
+          totalDealsSavings,
+          dealPercentageOfSales,
+          topDeals,
+        },
+        _isFiltered: dateFilter.type !== "all",
+        _originalTotalSales: analyticsData.totalSales,
+        _originalTotalOrders: analyticsData.totalOrders,
+      };
+    }, [analyticsData, filteredOrders, dateFilter]);
 
-  // Filter orders based on search
-  const searchedOrders = useMemo(() => {
-    if (!searchOrderId) return filteredOrders;
+    // Filter orders based on search
+    const searchedOrders = useMemo(() => {
+      if (!searchOrderId) return filteredOrders;
 
-    return filteredOrders.filter((order) => {
-      const orderId = order._id
-        ? String(order._id).slice(-8).toUpperCase()
-        : "";
-      return orderId.includes(searchOrderId.toUpperCase());
-    });
-  }, [filteredOrders, searchOrderId]);
+      return filteredOrders.filter((order) => {
+        const orderId = order._id
+          ? String(order._id).slice(-8).toUpperCase()
+          : "";
+        return orderId.includes(searchOrderId.toUpperCase());
+      });
+    }, [filteredOrders, searchOrderId]);
 
-  const handleDateFilterChange = (filterConfig) => {
-    setDateFilter(filterConfig);
-    // Reset displayed orders count when filter changes
-    setDisplayedOrdersCount(5);
-  };
+    const handleDateFilterChange = (filterConfig) => {
+      setDateFilter(filterConfig);
+      // Reset displayed orders count when filter changes
+      setDisplayedOrdersCount(5);
+    };
 
   const handleExportFilteredData = async (filterType, filterDetails) => {
     console.log("Exporting filtered data:", { filterType, filterDetails });
@@ -380,6 +412,18 @@ const filteredData = useMemo(() => {
     );
   }
 
+  if (isLoadingAnalytics) {
+    return (
+      <div className="bg-[#1a1a1a] rounded-lg p-8 text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#10b981] mx-auto mb-4"></div>
+        <p className="text-[#a0a0a0]">Loading analytics data...</p>
+        <p className="text-[#606060] text-sm mt-2">
+          Crunching the numbers for insights
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Header Section */}
@@ -399,7 +443,7 @@ const filteredData = useMemo(() => {
           {isLoadingOrders && (
             <div className="text-[#60a5fa] text-sm">Loading orders...</div>
           )}
-          {!isLoadingOrders && adminOrders && adminOrders.length > 0 && (
+          {!isLoadingOrders && adminInsightOrders && adminInsightOrders.length > 0 && (
             <button
               onClick={() => onExportToExcel(selectedAdmin._id)}
               disabled={isExportingExcel}
@@ -461,7 +505,9 @@ const filteredData = useMemo(() => {
         <div className="bg-[#1a1a1a] rounded-lg p-6 border border-[#404040]">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[#a0a0a0] text-sm font-medium">Total Money Generated</p>
+              <p className="text-[#a0a0a0] text-sm font-medium">
+                Total Money Generated
+              </p>
               <p className="text-[#f5f5f5] text-2xl font-bold">
                 Rs{filteredData.totalSales.toFixed(2)}
               </p>
@@ -713,10 +759,7 @@ const filteredData = useMemo(() => {
                   <div className="text-center">
                     <p className="text-[#a0a0a0]">Total Items Revenue</p>
                     <p className="text-[#10b981] font-bold text-lg">
-                      Rs
-                      {filteredData.topSellingItems
-                        .reduce((sum, item) => sum + item.totalRevenue, 0)
-                        .toFixed(2)}
+                      Rs{filteredData.totalSales.toFixed(2)}
                     </p>
                   </div>
                 </div>

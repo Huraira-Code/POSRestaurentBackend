@@ -196,7 +196,21 @@ export const getReceiptsByAdmin = (adminId) =>
   axiosWrapper.get(`/api/user/get-receipts/${adminId}`);
 
 // Orders Analytics Endpoints
-export const getOrdersByAdmin = (adminId) =>
-  axiosWrapper.get(`/api/user/get-orders/${adminId}`);
+export const getOrdersByAdmin = (adminId, page = 1, limit = 10, date = null) => {
+  const params = new URLSearchParams({ page, limit });
+  if (date) params.append("date", date);
+
+  return axiosWrapper.get(`/api/user/get-orders/${adminId}?${params.toString()}`);
+};
+
+// Orders Analytics Endpoint
+export const getAnalyticsByAdmin = (adminId, date = null) => {
+  const params = new URLSearchParams();
+  if (date) params.append("date", date);
+
+  return axiosWrapper.get(`/api/user/get-analytics/${adminId}?${params.toString()}`);
+};
+
+
 export const exportOrdersToExcel = (adminId) =>
   axiosWrapper.get(`/api/user/export-orders/${adminId}`);

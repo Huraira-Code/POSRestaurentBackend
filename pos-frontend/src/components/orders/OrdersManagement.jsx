@@ -21,6 +21,7 @@ const OrdersManagement = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showPrintReceiptsModal, setShowPrintReceiptsModal] = useState(false);
+const [selectedDate, setSelectedDate] = useState("");
 
   const [displayedOrdersCount, setDisplayedOrdersCount] = useState(10);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -403,6 +404,7 @@ const OrdersManagement = () => {
               </svg>
             </button>
           )}
+          
         </div>
 
         {/* Tabs */}

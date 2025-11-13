@@ -27,7 +27,6 @@ const DateFilter = ({ onDateFilterChange, onExportFilteredData }) => {
     { length: 5 },
     (_, i) => new Date().getFullYear() - i
   );
-
   useEffect(() => {
     const now = new Date();
     let startDate, endDate;
@@ -35,46 +34,64 @@ const DateFilter = ({ onDateFilterChange, onExportFilteredData }) => {
     switch (dateFilter) {
       case "today":
         startDate = new Date(now);
-        startDate.setHours(0, 0, 0, 0); // Start of today
-        endDate = new Date(now);
-        endDate.setHours(23, 59, 59, 999); // End of today
-        console.log("Today range:", startDate, endDate);
+        startDate.setHours(12, 0, 0, 0); // Start at today's 12 PM
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 1);
+        endDate.setHours(11, 59, 59, 999); // Next day 11:59 AM
         break;
 
       case "yesterday":
-        const yesterday = new Date(now);
-        yesterday.setDate(now.getDate() - 1);
-        yesterday.setHours(0, 0, 0, 0); // Start of yesterday
-        startDate = yesterday;
-
-        endDate = new Date(yesterday);
-        endDate.setHours(23, 59, 59, 999); // End of yesterday
-        console.log("Yesterday range:", startDate, endDate);
+        startDate = new Date(now);
+        startDate.setDate(now.getDate() - 1);
+        startDate.setHours(12, 0, 0, 0); // Yesterday 12 PM
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 1);
+        endDate.setHours(11, 59, 59, 999); // Today 11:59 AM
         break;
 
       case "week":
-        startDate = new Date(now);
-        startDate.setDate(now.getDate() - 7);
         endDate = new Date(now);
+        endDate.setHours(11, 59, 59, 999);
+        startDate = new Date(endDate);
+        startDate.setDate(endDate.getDate() - 7);
+        startDate.setHours(12, 0, 0, 0);
         break;
+
       case "month":
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        // Month starts from first day 12PM → last day next month's 12PM
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1, 12, 0, 0, 0);
+        endDate = new Date(
+          now.getFullYear(),
+          now.getMonth() + 1,
+          1,
+          11,
+          59,
+          59,
+          999
+        );
+        endDate.setDate(endDate.getDate() - 1);
         break;
+
       case "custom":
         if (customStartDate && customEndDate) {
           startDate = new Date(customStartDate);
+          startDate.setHours(12, 0, 0, 0); // Start 12 PM of chosen start day
           endDate = new Date(customEndDate);
+          endDate.setDate(endDate.getDate() + 1);
+          endDate.setHours(11, 59, 59, 999); // End 11:59 AM of next day
         }
         break;
+
       case "monthly":
         if (selectedMonth && selectedYear) {
           const monthIndex = months.indexOf(selectedMonth);
-          startDate = new Date(selectedYear, monthIndex, 1);
-          endDate = new Date(selectedYear, monthIndex + 1, 0);
+          startDate = new Date(selectedYear, monthIndex, 1, 12, 0, 0, 0);
+          endDate = new Date(selectedYear, monthIndex + 1, 1, 11, 59, 59, 999);
+          endDate.setDate(endDate.getDate() - 1);
         }
         break;
-      default: // 'all'
+
+      default:
         startDate = null;
         endDate = null;
         break;
@@ -91,7 +108,6 @@ const DateFilter = ({ onDateFilterChange, onExportFilteredData }) => {
 
   const handleFilterChange = (filterType) => {
     setDateFilter(filterType);
-    // Reset custom dates when switching to non-custom filter
     if (filterType !== "custom") {
       setCustomStartDate("");
       setCustomEndDate("");
@@ -159,6 +175,7 @@ const DateFilter = ({ onDateFilterChange, onExportFilteredData }) => {
             }
             className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm transition-colors flex items-center gap-2"
           >
+            Export
             <svg
               className="w-4 h-4"
               fill="none"
@@ -172,73 +189,44 @@ const DateFilter = ({ onDateFilterChange, onExportFilteredData }) => {
                 d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
               />
             </svg>
-            Export
           </button>
         </div>
       </div>
 
       {/* Quick Filter Buttons */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
-        <button
-          onClick={() => handleFilterChange("all")}
-          className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-            dateFilter === "all"
-              ? "bg-[#60a5fa] text-white"
-              : "bg-[#262626] text-[#f5f5f5] hover:bg-[#333]"
-          }`}
-        >
-          All Time
-        </button>
-        <button
-          onClick={() => handleFilterChange("today")}
-          className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-            dateFilter === "today"
-              ? "bg-[#60a5fa] text-white"
-              : "bg-[#262626] text-[#f5f5f5] hover:bg-[#333]"
-          }`}
-        >
-          Today
-        </button>
-        <button
-          onClick={() => handleFilterChange("yesterday")}
-          className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-            dateFilter === "yesterday"
-              ? "bg-[#60a5fa] text-white"
-              : "bg-[#262626] text-[#f5f5f5] hover:bg-[#333]"
-          }`}
-        >
-          Yesterday
-        </button>
-        <button
-          onClick={() => handleFilterChange("week")}
-          className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-            dateFilter === "week"
-              ? "bg-[#60a5fa] text-white"
-              : "bg-[#262626] text-[#f5f5f5] hover:bg-[#333]"
-          }`}
-        >
-          Last 7 Days
-        </button>
-        <button
-          onClick={() => handleFilterChange("month")}
-          className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-            dateFilter === "month"
-              ? "bg-[#60a5fa] text-white"
-              : "bg-[#262626] text-[#f5f5f5] hover:bg-[#333]"
-          }`}
-        >
-          This Month
-        </button>
-        <button
-          onClick={() => handleFilterChange("monthly")}
-          className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-            dateFilter === "monthly"
-              ? "bg-[#60a5fa] text-white"
-              : "bg-[#262626] text-[#f5f5f5] hover:bg-[#333]"
-          }`}
-        >
-          Specific Month
-        </button>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2 mb-4">
+        {[
+          "all",
+          "today",
+          "yesterday",
+          "week",
+          "month",
+          "monthly",
+          "custom",
+        ].map((filter) => {
+          const labels = {
+            all: "All Time",
+            today: "Today",
+            yesterday: "Yesterday",
+            week: "Last 7 Days",
+            month: "This Month",
+            monthly: "Specific Month",
+            custom: "Custom Range",
+          };
+          return (
+            <button
+              key={filter}
+              onClick={() => handleFilterChange(filter)}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                dateFilter === filter
+                  ? "bg-[#60a5fa] text-white"
+                  : "bg-[#262626] text-[#f5f5f5] hover:bg-[#333]"
+              }`}
+            >
+              {labels[filter]}
+            </button>
+          );
+        })}
       </div>
 
       {/* Custom Date Range */}
