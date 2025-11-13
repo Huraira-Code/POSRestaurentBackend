@@ -6,7 +6,7 @@ const { createItem, getAllItemsOfAdmin, deleteItemOfAdmin, updateItemOfAdmin, ge
 const { createMenu, getAllMenuOfAdmin, deleteMenuOfAdmin, updateMenuOfAdmin, importMenus, assignItemToImportedMenu, removeItemFromMenu } = require("../controllers/menuController");
 const upload = require('../middlewares/upload');
 const { getAllReceiptsForSuperAdmin, createReceiptFormat, updateReceiptFormat } = require("../controllers/receiptController");
-const { getOrdersForAdmin, exportOrdersToExcel, printDailySalesReportAndCloseDay } = require("../controllers/orderController");
+const { getOrdersForAdmin, exportOrdersToExcel, printDailySalesReportAndCloseDay, getAdminAnalytics } = require("../controllers/orderController");
 const { createVoucher, updateVoucher, getAllVoucher, getVouchersByAdmin, deleteVoucher, validateVoucher } = require("../controllers/voucherController");
 const { createDeal, getDealsForAdmin, updateDeal, deleteDeal, getDealById, getMyCreatedDeals, calculateDealTax } = require("../controllers/dealController");
 const router = express.Router();
@@ -55,6 +55,7 @@ router.route("/get-receipts/:adminId").get(isVerifiedUser(['SuperAdmin']), getAl
 
 // Get All Orders of Admin
 router.route("/get-orders/:adminId").get(isVerifiedUser(['SuperAdmin']), getOrdersForAdmin);
+router.route("/get-analytics/:adminId").get(isVerifiedUser(['SuperAdmin']), getAdminAnalytics);
 
 // Export Orders to Excel
 router.route("/export-orders/:adminId").get(isVerifiedUser(['SuperAdmin']), exportOrdersToExcel);

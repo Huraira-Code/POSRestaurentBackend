@@ -114,7 +114,7 @@ const receiptSchema = new mongoose.Schema({
   },
   paymentMethod: {
     type: String,
-      enum: ["CASH", "CARD", "ONLINE","CASH ON DELIVERY","CASH ON ARRIVAL"],
+    enum: ["CASH", "CARD", "ONLINE", "CASH ON DELIVERY", "CASH ON ARRIVAL"],
   },
   customerInfo: {
     name: String,
@@ -144,7 +144,7 @@ const receiptSchema = new mongoose.Schema({
   },
   orderType: {
     type: String,
-      enum: ["DINE", "DELIVERY", "PICKUP","FOODPANDA"],
+    enum: ["DINE", "DELIVERY", "PICKUP", "FOODPANDA", "FREE FOOD", "MARKETING"],
     required: true,
   },
   printedAt: {

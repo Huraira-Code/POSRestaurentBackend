@@ -38,7 +38,7 @@ router.route("/get-payment").patch(isVerifiedUser(["Admin"]), getPayment)
 router.route("/orders").get(isVerifiedUser(["Admin"]), getAllOrders)
 router.route("/deleteOrder").post(isVerifiedUser(["Admin"]), deleteOrder)
 
-// Deal Routes (Admin)
+// Deal Routes (zAdmin)
 router.route("/get-deals").get(isVerifiedUser(["Admin"]), getMyDeals);
 
 module.exports = router;

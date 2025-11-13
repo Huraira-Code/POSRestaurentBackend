@@ -205,7 +205,7 @@ const orderSchema = new mongoose.Schema(
     },
     orderType: {
       type: String,
-      enum: ["DINE", "DELIVERY", "PICKUP","FOODPANDA"],
+      enum: ["DINE", "DELIVERY", "PICKUP","FOODPANDA","FREE FOOD","MARKETING"],
       required: true,
     },
     orderStatus: {

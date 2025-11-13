@@ -661,7 +661,14 @@ const printDailySalesReportAndCloseDay = async (req, res, next) => {
     };
 
     // 🔥 New: Payment breakdown by orderType
-    const orderTypes = ["DINE", "DELIVERY", "PICKUP", "FOODPANDA"];
+    const orderTypes = [
+      "DINE",
+      "DELIVERY",
+      "PICKUP",
+      "FOODPANDA",
+      "FREE FOOD",
+      "MARKETING",
+    ];
     const paymentBreakdownByType = {};
 
     orderTypes.forEach((type) => {
@@ -751,9 +758,17 @@ const printDailySalesReportAndCloseDay = async (req, res, next) => {
       }
     });
 
+    const nowed = new Date();
+    const pakistanTime = new Date(nowed.getTime() + 5 * 60 * 60 * 1000);
+
     await Order.updateMany(
       { _id: { $in: ordersToClose.map((order) => order._id) } },
-      { $set: { endOfDayClosedData: Date.now() } }
+      {
+        $set: {
+          endOfDayClosedData: pakistanTime,
+          isEndOfDayClosed: true,
+        },
+      }
     );
 
     // --- Build Sales Report ---
@@ -2203,6 +2218,135 @@ const deleteOrder = async (req, res, next) => {
 // New function to get orders for a specific admin (for Super Admin analytics)
 const getOrdersForAdmin = async (req, res, next) => {
   try {
+    const { adminId } = req.params;
+    const { date, page = 1 } = req.query; // optional query params
+
+    if (!adminId) {
+      return res.status(400).json({
+        success: false,
+        message: "Admin ID is required",
+      });
+    }
+
+    // 🧮 Pagination setup
+    const limit = 10;
+    const skip = (page - 1) * limit;
+
+    // 🗓️ Date filter logic: from 12 PM (noon) of given date to next day 12 PM
+    let dateFilter = {};
+    if (date) {
+      const startOfRange = new Date(date);
+      startOfRange.setHours(12, 0, 0, 0); // 12 PM selected day
+      const endOfRange = new Date(date);
+      endOfRange.setDate(endOfRange.getDate() + 1);
+      endOfRange.setHours(12, 0, 0, 0); // 12 PM next day
+
+      dateFilter = {
+        createdAt: { $gte: startOfRange, $lt: endOfRange },
+      };
+    }
+
+    // 🧠 Fetch filtered & paginated orders
+    const orders = await Order.find({
+      adminId,
+      ...dateFilter,
+    })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    // ⏱️ If no date provided, we already get latest 10 (sorted by createdAt)
+
+    // 🧩 Populate items with full details
+    const ordersWithCompleteItems = await Promise.all(
+      orders.map(async (order) => {
+        if (!order.items || order.items.length === 0) return order;
+
+        const completeItems = await Promise.all(
+          order.items.map(async (orderItem) => {
+            try {
+              const fullItem = await Item.findById(orderItem.itemId)
+                .populate("categoryId", "name")
+                .lean();
+
+              if (!fullItem) return orderItem;
+
+              let menuInfo = null;
+              if (orderItem.menuId) {
+                const menu = await Menu.findById(orderItem.menuId)
+                  .select("name logo")
+                  .lean();
+                if (menu) {
+                  menuInfo = {
+                    menuId: menu._id,
+                    menuName: menu.name,
+                    menuLogo: menu.logo,
+                  };
+                }
+              }
+
+              return {
+                _id: fullItem._id,
+                itemId: fullItem._id,
+                name: fullItem.name,
+                adminId: fullItem.adminId,
+                categoryId: fullItem.categoryId?._id || fullItem.categoryId,
+                categoryName: fullItem.categoryId?.name || "General",
+                menuId: orderItem.menuId || null,
+                menuName:
+                  orderItem.menuName || menuInfo?.menuName || "General Items",
+                menuLogo: menuInfo?.menuLogo || null,
+                originalPrice: fullItem.originalPrice || fullItem.price,
+                price: orderItem.price || fullItem.price,
+                basePrice: fullItem.price,
+                discount: fullItem.discount || 0,
+                itemDiscount: orderItem.itemDiscount || fullItem.discount || 0,
+                tax: fullItem.tax || { cash: "0", card: "0" },
+                options: fullItem.options || [],
+                selectedOptions:
+                  orderItem.options || orderItem.selectedOptions || [],
+                pictureURL: fullItem.pictureURL || "",
+                quantity: orderItem.quantity,
+                paymentMethod: orderItem.paymentMethod,
+                paymentType: orderItem.paymentType,
+                itemSubtotal:
+                  (orderItem.price || fullItem.price) * orderItem.quantity,
+                finalItemPrice:
+                  (orderItem.price || fullItem.price) -
+                  (fullItem.discount || 0),
+              };
+            } catch {
+              return orderItem;
+            }
+          })
+        );
+
+        return { ...order, items: completeItems };
+      })
+    );
+
+    // 🧾 Response
+    res.status(200).json({
+      success: true,
+      message: `Retrieved ${ordersWithCompleteItems.length} orders for admin`,
+      page: Number(page),
+      hasMore: ordersWithCompleteItems.length === limit,
+      data: ordersWithCompleteItems,
+    });
+  } catch (error) {
+    console.error("Error fetching orders for admin:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch orders for admin",
+      error: error.message,
+    });
+  }
+};
+
+
+const getAdminAnalytics = async (req, res, next) => {
+  try {
     const adminId = req.params.adminId;
 
     if (!adminId) {
@@ -2386,6 +2530,119 @@ const getOrdersForAdmin = async (req, res, next) => {
     });
   }
 };
+
+// const getAdminAnalytics = async (req, res, next) => {
+//   try {
+//     const { adminId } = req.params;
+//     const { date } = req.query; // optional query param for date range
+
+//     if (!adminId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Admin ID is required",
+//       });
+//     }
+
+//     // 🗓️ Date filter: from 12 PM of selected date → next day 12 PM
+//     let dateFilter = {};
+//     if (date) {
+//       const startOfRange = new Date(date);
+//       startOfRange.setHours(12, 0, 0, 0);
+//       const endOfRange = new Date(date);
+//       endOfRange.setDate(endOfRange.getDate() + 1);
+//       endOfRange.setHours(12, 0, 0, 0);
+
+//       dateFilter = {
+//         createdAt: { $gte: startOfRange, $lt: endOfRange },
+//       };
+//     }
+
+//     // 🧠 Fetch all orders for analytics
+//     const orders = await Order.find({
+//       adminId,
+//       ...dateFilter,
+//     }).lean();
+
+//     if (orders.length === 0) {
+//       return res.status(200).json({
+//         success: true,
+//         message: "No orders found for analytics",
+//         data: {
+//           totalOrders: 0,
+//           totalRevenue: 0,
+//           totalQuantity: 0,
+//           averageOrderValue: 0,
+//           topItems: [],
+//           paymentBreakdown: [],
+//         },
+//       });
+//     }
+
+//     // 📊 Compute analytics
+//     let totalRevenue = 0;
+//     let totalQuantity = 0;
+//     const itemCountMap = {};
+//     const paymentMap = {};
+
+//     for (const order of orders) {
+//       for (const item of order.items || []) {
+//         const subtotal = (item.price || 0) * (item.quantity || 0);
+//         totalRevenue += subtotal;
+//         totalQuantity += item.quantity || 0;
+
+//         // Count top-selling items
+//         if (item.itemId) {
+//           if (!itemCountMap[item.name]) {
+//             itemCountMap[item.name] = {
+//               itemId: item.itemId,
+//               name: item.name,
+//               quantity: 0,
+//               totalSales: 0,
+//             };
+//           }
+//           itemCountMap[item.name].quantity += item.quantity || 0;
+//           itemCountMap[item.name].totalSales += subtotal;
+//         }
+
+//         // Payment method breakdown
+//         const method = item.paymentMethod || "unknown";
+//         paymentMap[method] = (paymentMap[method] || 0) + subtotal;
+//       }
+//     }
+
+//     const topItems = Object.values(itemCountMap)
+//       .sort((a, b) => b.totalSales - a.totalSales)
+//       .slice(0, 5); // top 5 best-sellers
+
+//     const paymentBreakdown = Object.keys(paymentMap).map((method) => ({
+//       method,
+//       total: paymentMap[method],
+//     }));
+
+//     const averageOrderValue = totalRevenue / orders.length;
+
+//     // 🧾 Final analytics response
+//     res.status(200).json({
+//       success: true,
+//       message: "Admin analytics retrieved successfully",
+//       data: {
+//         totalOrders: orders.length,
+//         totalRevenue,
+//         totalQuantity,
+//         averageOrderValue: Number(averageOrderValue.toFixed(2)),
+//         topItems,
+//         paymentBreakdown,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Error fetching admin analytics:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch analytics",
+//       error: error.message,
+//     });
+//   }
+// };
 
 // Excel export function for orders
 const exportOrdersToExcel = async (req, res, next) => {
@@ -2706,4 +2963,5 @@ module.exports = {
   updatePaymentMethod,
   addItemsAndDealsToOrder,
   deleteOrder,
+  getAdminAnalytics,
 };

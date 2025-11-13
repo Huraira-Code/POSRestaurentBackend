@@ -3,7 +3,7 @@ const config = require("./config");
 
 const connectDB = async () => {
     try {
-        const conn = await mongoose.connect("mongodb+srv://huraira:Usama10091@cluster0.hnawam1.mongodb.net/POSRestaurented")
+        const conn = await mongoose.connect("mongodb+srv://huraira:Usama10091@cluster0.hnawam1.mongodb.net/POSRestaurented2")
         console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
     } catch (error) {
         console.log(`❌ Database connection failed: ${error}`);
