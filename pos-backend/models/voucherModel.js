@@ -1,13 +1,14 @@
+
 const mongoose = require('mongoose');
 
 const voucherSchema = new mongoose.Schema({
-  menuId: {
+ AdminId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Menu",
+    ref: "admin",
     required: true
   },
  code: {
-    type: Number,
+    type: String,
     required: true,
     unique: true
   },  
@@ -16,7 +17,12 @@ const voucherSchema = new mongoose.Schema({
     required: true,
   }, 
   applyOnce: {
-    type: Boolean,
+    type: Boolean,  
+  },
+  voucherType:{
+    type:String,
+    enum:["FIXED","PERCENTAGE"],
+    default:"FIXED"
   }
   
 }, {timestamps: true});

@@ -2344,7 +2344,6 @@ const getOrdersForAdmin = async (req, res, next) => {
   }
 };
 
-
 const getAdminAnalytics = async (req, res, next) => {
   try {
     const adminId = req.params.adminId;
