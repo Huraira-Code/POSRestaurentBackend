@@ -14,7 +14,6 @@ const receiptSchema = new mongoose.Schema({
   menuId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Menu",
-    required: true,
   },
   menuName: {
     type: String,
