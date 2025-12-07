@@ -208,7 +208,10 @@ const createVoucher = async (req, res, next) => {
       });
     }
 
-    const existing = await Voucher.findOne({ code });
+    const existing = await Voucher.findOne({
+      code,
+      AdminId: req.body.AdminId, // or whatever field you're using
+    });
     if (existing) {
       return res.status(400).json({
         success: false,
