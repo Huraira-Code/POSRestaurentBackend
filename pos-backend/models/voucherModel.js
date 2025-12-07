@@ -23,7 +23,27 @@ const voucherSchema = new mongoose.Schema({
     type:String,
     enum:["FIXED","PERCENTAGE"],
     default:"FIXED"
+  },
+
+  // Voucher applies to selected items only
+  itemIds: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "item",
+    }
+  ],
+
+  //You can also add "isCapped" features if you want them saved
+  isCapped: {
+    type: Boolean,
+    default: false
+  },
+
+  capAmount: {
+    type: Number,
+    default: null
   }
+
   
 }, {timestamps: true});
 
